@@ -1,14 +1,12 @@
 {
-  "botToken": "Bot_Token",
-  "mongoURI": "MOngoDB_URI",
+  "botToken": "7731877803:AAFKp3NksUCMoFC0k-FLAyp6vWBcxNaVxBo",
+  "mongoURI": "mongodb+srv://gamingshaon74:XYHJPNVqUHvtA30M@cluster0.n2new.mongodb.net/TELEBOTV2?retryWrites=true&w=majority&appName=Cluster0",
   "note": "Make sure to add your bot token and mongoURI from MongoDB and also respect author for their hardwork for this project by not changing code unnecessarily.",
   "prefix": "/",
   "adminId": [
-    "5947023314",
-    "6550312881",
-    "5492951949"
+    "5891084825"
   ],
-  "owner": "5947023314",
+  "owner": "5891084825",
   "onlyAdmin": false,
   "port": "3000",
   "botName": "Yukai Bot",
