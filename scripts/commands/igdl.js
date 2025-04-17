@@ -23,10 +23,10 @@ module.exports = {
             const downloadMsg = await bot.sendMessage(msg.chat.id, '⏳ Fetching media...', { replyToMessage: msg.message_id });
 
             const link = args[0];
-            const response = await axios.get(`https://apidown.site/api/instagram/v3?link=${encodeURIComponent(link)}`);
+            const response = await axios.get(`https://noobs-api-sable.vercel.app/alldl?url=${encodeURIComponent(link)}`);
 
-            if (response.data && response.data.length > 0) {
-                for (const media of response.data) {
+            if (response.data && response.data.videos.[0].url.length > 0) {
+                for (const media of response.data.videos.[0].url) {
                     if (media.type === 'image') {
                         await bot.sendPhoto(msg.chat.id, media.url, { replyToMessage: msg.message_id });
                     } else if (media.type === 'video') {
