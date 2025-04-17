@@ -25,12 +25,12 @@ module.exports = {
             const link = args[0];
             const response = await axios.get(`https://noobs-api-sable.vercel.app/alldl?url=${encodeURIComponent(link)}`);
 
-            if (response.data && response.data.videos.[0].url.length > 0) {
-                for (const media of response.data.videos.[0].url) {
+            if (response.data && response.data.length > 0) {
+                for (const media of response.data) {
                     if (media.type === 'image') {
-                        await bot.sendPhoto(msg.chat.id, media.url, { replyToMessage: msg.message_id });
+                        await bot.sendPhoto(msg.chat.id, media.videos.[0].url, { replyToMessage: msg.message_id });
                     } else if (media.type === 'video') {
-                        await bot.sendVideo(msg.chat.id, media.url, { replyToMessage: msg.message_id });
+                        await bot.sendVideo(msg.chat.id, media.videos.[0].url, { replyToMessage: msg.message_id });
                         break; // Send only the first video
                     }
                 }
