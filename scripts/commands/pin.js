@@ -23,7 +23,7 @@ module.exports = {
         const query = input[0].trim();
         const number = parseInt(input[1]) || 6; // Default to 6 if number is not provided
 
-        const apiUrl = `https://noobs-api-sable.vercel.app/pinterest?search=${encodeURIComponent(query)}`;
+        const apiUrl = `https://nn54l5-8888.csb.app//pinterest?search=${encodeURIComponent(query)}`;
 
         // Send a pre-processing message
         const preMessage = await bot.sendMessage(chatId, "🔍 | Searching for images...", { replyToMessage: msg.message_id });
