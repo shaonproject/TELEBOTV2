@@ -92,4 +92,4 @@ onChat = async ({ message, event }) => {
       message.reply(error.message);
     }
   }
-};
+}
