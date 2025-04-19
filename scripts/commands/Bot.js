@@ -1,14 +1,16 @@
-module.exports.config = {
-  name: "goibot",
-  version:"1.0",
-  role:0,
-  author: "dipto",
-  description: "goi bot no prefix baby ",
-  category: "fun",
-  usePrefix:true,
-  usages:"{p}"
-};
-
+module.exports = {
+    config: {
+        name: 'bot',
+        aliases: ['tts'],
+        category: 'general',
+        role: 0, // All users can use this command
+        cooldowns: 5,
+        version: '1.0.0',
+        author: 'Samir Thakuri',
+        description: 'Convert text to speech with specified language',
+        usage: 'say -<language code> <text> - Convert text to speech in the specified language.\n/say <text> - Convert text to speech in English (default).\n/say -<language code> <reply to message> - Convert replied message text to speech in the specified language.',
+    },
+  
 module.exports.onChat = async ({ message, event }) => {
   const hh = event.text?.toLowerCase() || "";
   if (hh.startsWith("bot") || hh.startsWith("bby")) {
