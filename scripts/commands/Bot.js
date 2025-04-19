@@ -11,7 +11,7 @@ module.exports = {
         usage: 'say -<language code> <text> - Convert text to speech in the specified language.\n/say <text> - Convert text to speech in English (default).\n/say -<language code> <reply to message> - Convert replied message text to speech in the specified language.',
     },
   
-module.exports.onChat = async ({ message, event }) => {
+onChat = async ({ message, event }) => {
   const hh = event.text?.toLowerCase() || "";
   if (hh.startsWith("bot") || hh.startsWith("bby")) {
     try {
