@@ -18,7 +18,7 @@ const speedtest = new FastSpeedtest({
 
 module.exports = {
     config: {
-        name: "stats",
+        name: "upt",
         aliases: ["botstats", "statistics"],
         role: 2,
         cooldowns: 5,
