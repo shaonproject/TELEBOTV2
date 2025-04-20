@@ -19,9 +19,9 @@ module.exports = {
         }
 
         try {
-            const apiKey = '060a6bcfa19809c2cd4d97a212b19273'; // Replace with your API key
+            const apiKey = '77f75cb02ca4d4906e6c52d2784485f8'; // Replace with your API key
             const place = encodeURIComponent(args.join(' ')); // Join all args to handle multi-word places
-            const response = await axios.get(`https://api.openweathermap.org/data/2.5/weather?q=${place}&units=metric&appid=${apiKey}`);
+            const response = await axios.get(`http://api.openweathermap.org/data/2.5/weather?q=${place}&units=metric&appid=${apiKey}`);
             
             const data = response.data;
             const name = data.name;
