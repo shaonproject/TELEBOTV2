@@ -32,9 +32,9 @@ module.exports = {
             // Make a request to the Pinterest API
             const response = await axios.get(apiUrl);
 
-            if (response.data.status === 200 && response.data.data.length > 0) {
+            if (response.data.data.length > 0) {
                 // Prepare an array of image objects for the album
-                const images = response.data.data.map(imageUrl => ({ type: 'photo', media: imageUrl }));
+                const images = response.data.data(imageUrl => ({ type: 'photo', media: imageUrl }));
 
                 // Send the album
                 await bot.sendMediaGroup(chatId, images, { caption: `Here are images for "${query}"`, replyToMessage: msg.message_id });
