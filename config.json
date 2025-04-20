@@ -9,8 +9,8 @@
   "owner": "5891084825",
   "onlyAdmin": false,
   "port": "3000",
-  "botName": "Yukai Bot",
-  "copyrightMark": "[ 🐉 | Yukai ]",
+  "botName": "SHAON PROJECT",
+  "copyrightMark": "[ 🐉 | Shaon Ahmed ]",
   "greetNewMembers": {
     "enabled": true,
     "gifUrl": "https://telegra.ph/file/0f328de5109569feceff3.gif"
@@ -20,7 +20,7 @@
     "gifUrl": "https://telegra.ph/file/45697c3084f929ba465f1.gif"
   },
   "globalapi": {
-    "samirapi": "https://apibysamir.onrender.com",
+    "shaonapi": "https://noobs-api-sable.vercel.app",
     "pikachu": "https://www.samirxpikachu.run.place"
   }
 }
