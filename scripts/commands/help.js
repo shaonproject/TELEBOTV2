@@ -9,7 +9,7 @@ module.exports = {
         role: 0,
         cooldowns: 5,
         version: '1.0.0',
-        author: 'Samir Thakuri',
+        author: 'Shaon Ahmed',
         description: 'Get a list of all available commands or detailed information about a specific command',
         usage: 'help [command|page]'
     },
@@ -41,19 +41,19 @@ module.exports = {
                 // Handle pagination if sorthelp is `name`
                 if (sorthelp === false) {
                     const page = parseInt(args[0], 10);
-                    if (page < 1 || page > Math.ceil(commands.length / 15)) {
+                    if (page < 1 || page > Math.ceil(commands.length / 999)) {
                         return bot.sendMessage(chatId, 'Page not found. Please use a valid page number.', { replyToMessage: msg.message_id });
                     }
 
-                    const start = (page - 1) * 15;
+                    const start = (page - 1) * 999;
                     const end = Math.min(start + 15, commands.length);
                     const commandList = commands.slice(start, end);
 
-                    let helpMessage = `Help - Page ${page}/${Math.ceil(commands.length / 15)}\n`;
+                    let helpMessage = `Help - Page ${page}/${Math.ceil(commands.length / 999)}\n`;
                     commandList.forEach((cmd, index) => {
                         helpMessage += `━━━━━━━━━━━━━\n[${start + index + 1}]. ${cmd.config.name} - ${cmd.config.description}\n`;
                     });
-                    helpMessage += `━━━━━━━━━━━━━\nPage [ ${page}/${Math.ceil(commands.length / 15)} ]\n`;
+                    helpMessage += `━━━━━━━━━━━━━\nPage [ ${page}/${Math.ceil(commands.length / 999)} ]\n`;
                     helpMessage += `Currently, the bot has ${commands.length} commands that can be used\n`;
                     helpMessage += `» Type /help <page> to view the command list\n`;
                     helpMessage += `» Type /help <command> to view the details of that command\n`;
@@ -79,7 +79,7 @@ Name: ${name}
 » Version: ${version || '1.0.0'}
 » Permission: ${roleText}
 » Time per command: ${cooldowns} seconds
-» Author: ${author || 'Samir Thakuri'}
+» Author: ${author || 'Shaon Ahmed'}
 ━━━━━━━━━━  ❖  ━━━━━━━━━━
 » Usage guide:
 ${config.prefix}${usage}
@@ -123,12 +123,12 @@ ${config.prefix}${usage}
                 return bot.sendMessage(chatId, helpMessage, { replyToMessage: msg.message_id });
             } else {
                 // Default help menu with pagination
-                const commandList = commands.slice(0, 15); // Show first 15 commands
+                const commandList = commands.slice(0, 999); // Show first 15 commands
                 let helpMessage = `Hello, ${msg.from.first_name}!\nHere's My Command List\n\n━━━━━━━━━━━━━━━━━━━━━━`;
                 commandList.forEach((cmd, index) => {
                     helpMessage += `\n[${index + 1}]. ${cmd.config.name} - ${cmd.config.description|| ''}\n`;
                 });
-                helpMessage += `\n━━━━━━━━━━━━━━━━━━━━━━\nPage [ 1/${Math.ceil(commands.length / 15)} ]\n`;
+                helpMessage += `\n━━━━━━━━━━━━━━━━━━━━━━\nPage [ 1/${Math.ceil(commands.length / 999)} ]\n`;
                 helpMessage += `Currently, the bot has ${commands.length} commands that can be used\n`;
                 helpMessage += `» Type /help <page> to view the command list\n`;
                 helpMessage += `» Type /help <command> to view the details of that command\n`;
