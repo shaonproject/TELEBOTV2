@@ -6,6 +6,7 @@ const meta = {
   name: "pic",
   version: "0.0.1",
   aliases: ["pin"],
+  role: 0,
   description: "This command allows you to search for images on Pinterest based on a given query and fetch a specified number of images (1-20).",
   author: "ArYAN",
   prefix: true,
