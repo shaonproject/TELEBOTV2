@@ -15,6 +15,7 @@ connectDB(config.mongoURI).then(async ({ threadModel, userModel }) => {
     // Load commands and events
     const commands = new Map();
     const aliases = new Map();
+
     const loadCommands = (dir) => {
         fs.readdirSync(dir).forEach(file => {
             const filePath = path.join(dir, file);
@@ -42,6 +43,7 @@ connectDB(config.mongoURI).then(async ({ threadModel, userModel }) => {
             if (path.extname(file) === '.js') {
                 const event = require(path.join(eventsDir, file));
 
+                // Bind events that have onEvent()
                 if (event.config && event.onEvent) {
                     bot.on(event.config.name, (msg) => event.onEvent({ bot, threadModel, userModel, msg, config }));
                 }
@@ -88,10 +90,49 @@ connectDB(config.mongoURI).then(async ({ threadModel, userModel }) => {
         }
     };
 
+    // Helper: Create message helpers for reply, stream, unsend etc.
+    function createMessageHelpers(chatId, messageId = null) {
+        return {
+            reply: async (text, options = {}) => {
+                return bot.sendMessage(chatId, text, options.replyToMessage ? { replyToMessage: options.replyToMessage } : {});
+            },
+            stream: async ({ url, caption }) => {
+                // TeleBot এ audio/video স্ট্রিম করার জন্য sendAudio/sendVideo ইউজ করতে হবে
+                // নিচে sendAudio এর উদাহরণ দিলাম
+                return bot.sendAudio(chatId, url, { caption: caption || "" });
+            },
+            unsend: async (msgId) => {
+                return bot.deleteMessage(chatId, msgId).catch(() => {});
+            }
+        };
+    }
+
+    // onChat event support: scripts/events/onChat.js তে থাকা onChat ফাংশন কল হবে
+    let onChatHandler = null;
+    const eventsDir = path.join(__dirname, 'scripts', 'events');
+    fs.readdirSync(eventsDir).forEach(file => {
+        if (file === 'onChat.js') {
+            const event = require(path.join(eventsDir, file));
+            if (event.onChat && typeof event.onChat === 'function') {
+                onChatHandler = event.onChat;
+                console.log('onChat event loaded');
+            }
+        }
+    });
+
     bot.on('text', async (msg) => {
         const chatId = msg.chat.id.toString();
         const userId = msg.from.id.toString();
         
+        // onChat ইভেন্ট থাকলে কল করবো
+        if (onChatHandler) {
+            try {
+                await onChatHandler({ bot, msg, config });
+            } catch (e) {
+                console.error('Error in onChat event:', e);
+            }
+        }
+
         // Find or create thread in database
         let thread = await threadModel.findOne({ chatId });
         if (!thread) {
@@ -118,7 +159,9 @@ connectDB(config.mongoURI).then(async ({ threadModel, userModel }) => {
         if (globalBanInfo) {
             const banTime = moment(globalBanInfo.banTime).format('MMMM Do YYYY, h:mm:ss A');
             if (msg.text.startsWith(config.prefix)) {
-                return bot.sendPhoto(chatId, globalBanInfo.proof, { caption: `Dear @${msg.from.username} !\nYou are globally banned from using ${config.botName}\nReason: ${globalBanInfo.reason}\nBan Time: ${banTime}` }, { replyToMessage: msg.message_id });
+                return bot.sendPhoto(chatId, globalBanInfo.proof, {
+                    caption: `Dear @${msg.from.username} !\nYou are globally banned from using ${config.botName}\nReason: ${globalBanInfo.reason}\nBan Time: ${banTime}`
+                }, { replyToMessage: msg.message_id });
             }
             return; // Exit if user is globally banned
         }
@@ -155,8 +198,8 @@ connectDB(config.mongoURI).then(async ({ threadModel, userModel }) => {
             }
             await thread.save();
         }
-        
-        // Handle command processing (if message starts with the configured prefix)
+
+        // Command processing
         if (msg.text.startsWith(config.prefix)) {
             const args = msg.text.slice(config.prefix.length).trim().split(/ +/);
             const commandName = args.shift().toLowerCase();
@@ -193,10 +236,19 @@ connectDB(config.mongoURI).then(async ({ threadModel, userModel }) => {
         
             timestamps.set(userId, now);
             setTimeout(() => timestamps.delete(userId), cooldownAmount);
+
+            // Create message helper for this chat/message
+            const message = createMessageHelpers(chatId, msg.message_id);
         
-            // Execute command
+            // Execute command: onStart() preferred, else run()
             try {
-                await command.onStart({ msg, bot, args, chatId, userId, config, botName: config.botName, senderName: `${msg.from.first_name} ${msg.from.last_name}`, username: msg.from.username, copyrightMark: config.copyrightMark, threadModel, userModel, user, thread, api: config.globalapi });
+                if (typeof command.onStart === 'function') {
+                    await command.onStart({ msg, bot, args, chatId, userId, config, botName: config.botName, senderName: `${msg.from.first_name} ${msg.from.last_name}`, username: msg.from.username, copyrightMark: config.copyrightMark, threadModel, userModel, user, thread, api: config.globalapi, message });
+                } else if (typeof command.run === 'function') {
+                    await command.run({ msg, bot, args, chatId, userId, config, botName: config.botName, senderName: `${msg.from.first_name} ${msg.from.last_name}`, username: msg.from.username, copyrightMark: config.copyrightMark, threadModel, userModel, user, thread, api: config.globalapi, message });
+                } else {
+                    await bot.sendMessage(chatId, 'This command is not implemented properly.');
+                }
             } catch (error) {
                 console.error(`Error executing command ${commandName}:`, error);
                 bot.sendMessage(chatId, 'There was an error executing the command.');
