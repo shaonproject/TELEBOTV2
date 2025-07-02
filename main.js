@@ -8,40 +8,20 @@ const axios = require('axios');
 
 const bot = new TeleBot(config.botToken);
 
-// ========== Reply Store ==========
-const replyStore = new Map();
-global.functions = { reply: replyStore };
-
-// ========== Message Handler ==========
-const message = {
-    reply: (text, options = {}) => {
-        return bot.sendMessage(options.chatId, text, { replyToMessage: options.replyToMessage });
-    },
-    stream: ({ url, caption, chatId, replyToMessage, type = "audio" }) => {
-        if (type === "video") {
-            return bot.sendVideo(chatId, url, { caption }, { replyToMessage });
-        } else {
-            return bot.sendAudio(chatId, url, { caption }, { replyToMessage });
-        }
-    },
-    unsend: (chatId, messageId) => {
-        return bot.deleteMessage(chatId, messageId);
-    }
-};
-
-// ========== Mongo Connect ==========
+// Connect to MongoDB
 connectDB(config.mongoURI).then(async ({ threadModel, userModel }) => {
-    console.log('MongoDB connected ✅');
+    console.log('MongoDB connected');
 
-    // === Command Loader ===
+    // Load commands and events
     const commands = new Map();
     const aliases = new Map();
     const loadCommands = (dir) => {
         fs.readdirSync(dir).forEach(file => {
             const filePath = path.join(dir, file);
+            const fileExtension = path.extname(file);
             if (fs.statSync(filePath).isDirectory()) {
                 loadCommands(filePath);
-            } else if (file.endsWith('.js')) {
+            } else if (fileExtension === '.js') {
                 const command = require(filePath);
                 if (command.config) {
                     commands.set(command.config.name.toLowerCase(), command);
@@ -53,161 +33,198 @@ connectDB(config.mongoURI).then(async ({ threadModel, userModel }) => {
         });
     };
     loadCommands(path.join(__dirname, 'scripts/commands'));
+    
+    // Function to load and execute events
+    const loadEvents = async (bot, threadModel, userModel) => {
+        const eventsDir = path.join(__dirname, 'scripts', 'events');
 
-    // === Events Loader ===
-    const loadEvents = () => {
-        const dir = path.join(__dirname, 'scripts/events');
-        fs.readdirSync(dir).forEach(file => {
-            if (file.endsWith('.js')) {
-                const event = require(path.join(dir, file));
+        fs.readdirSync(eventsDir).forEach(file => {
+            if (path.extname(file) === '.js') {
+                const event = require(path.join(eventsDir, file));
+
                 if (event.config && event.onEvent) {
-                    bot.on(event.config.name, (msg) => event.onEvent({ msg, bot, config }));
+                    bot.on(event.config.name, (msg) => event.onEvent({ bot, threadModel, userModel, msg, config }));
                 }
             }
         });
-    };
-    loadEvents();
 
-    // === Permission Check ===
+        console.log('Events loaded and bound successfully.');
+    };
+    loadEvents(bot, threadModel, userModel);
+
+    // Function to check if user is an admin
     const isAdmin = (userId, chatAdmins) => {
         return chatAdmins.some(admin => admin.user.id === userId);
     };
 
+    // Function to check if user is globally banned
     const isGloballyBanned = async (userId) => {
         try {
-            const res = await axios.get('https://raw.githubusercontent.com/notsopreety/Uselessrepo/main/gban.json');
-            const banned = res.data.find(user => user.userId === userId);
-            return banned || null;
-        } catch {
+            const response = await axios.get('https://raw.githubusercontent.com/notsopreety/Uselessrepo/main/gban.json');
+            const bannedUsers = response.data;
+            const bannedUser = bannedUsers.find(user => user.userId === userId);
+            return bannedUser ? bannedUser : null;
+        } catch (error) {
+            console.error('Error fetching global ban list:', error);
             return null;
         }
     };
-
+    
     const cooldowns = new Map();
 
-    // === Main Message Listener ===
+    // Check if user has necessary permissions to execute a command
+    const hasPermission = async (userId, chatId, commandConfig) => {
+        const chatAdmins = chatId ? await bot.getChatAdministrators(chatId) : [];
+        if (commandConfig.onlyAdmin) {
+            // If onlyAdmin is true, only bot admin can use the bot
+            return config.adminId.includes(userId.toString());
+        } else {
+            const userIsAdmin = isAdmin(userId, chatAdmins);
+            if (commandConfig.role === 1) {
+                return userIsAdmin;
+            }
+            // For other roles, fallback to bot admin check
+            return config.adminId.includes(userId.toString());
+        }
+    };
+
     bot.on('text', async (msg) => {
         const chatId = msg.chat.id.toString();
         const userId = msg.from.id.toString();
-        const text = msg.text;
-
-        // === DB Setup ===
-        let thread = await threadModel.findOne({ chatId }) || new threadModel({ chatId });
-        let user = await userModel.findOne({ userID: userId }) || new userModel({
-            userID: userId,
-            username: msg.from.username,
-            first_name: msg.from.first_name,
-            last_name: msg.from.last_name
-        });
-        await thread.save();
-        await user.save();
-
-        // === Global Ban ===
-        const globalBan = await isGloballyBanned(userId);
-        if (globalBan) {
-            const banTime = moment(globalBan.banTime).format('MMMM Do YYYY, h:mm:ss A');
-            return bot.sendPhoto(chatId, globalBan.proof, {
-                caption: `🚫 @${msg.from.username} is Globally Banned\nReason: ${globalBan.reason}\nTime: ${banTime}`
+        
+        // Find or create thread in database
+        let thread = await threadModel.findOne({ chatId });
+        if (!thread) {
+            thread = new threadModel({ chatId });
+            await thread.save();
+            console.log(`[DATABASE] New thread: ${chatId} database has been created!`);
+        }
+        
+        // Find or create user in database
+        let user = await userModel.findOne({ userID: userId });
+        if (!user) {
+            user = new userModel({
+                userID: userId,
+                username: msg.from.username,
+                first_name: msg.from.first_name,
+                last_name: msg.from.last_name
             });
+            await user.save();
+            console.log(`[DATABASE] New user: ${userId} database has been created!`);
         }
 
-        // === Local Ban ===
-        if (user.banned) return bot.sendMessage(chatId, '🚫 You are banned from this bot.');
+        // Check if user is globally banned
+        const globalBanInfo = await isGloballyBanned(userId);
+        if (globalBanInfo) {
+            const banTime = moment(globalBanInfo.banTime).format('MMMM Do YYYY, h:mm:ss A');
+            if (msg.text.startsWith(config.prefix)) {
+                return bot.sendPhoto(chatId, globalBanInfo.proof, { caption: `Dear @${msg.from.username} !\nYou are globally banned from using ${config.botName}\nReason: ${globalBanInfo.reason}\nBan Time: ${banTime}` }, { replyToMessage: msg.message_id });
+            }
+            return; // Exit if user is globally banned
+        }
 
-        // === GC Ban ===
-        if (thread.users?.get(userId)?.gcBan) return bot.sendMessage(chatId, '🚫 You are banned in this group.');
+        // Check if user is banned locally
+        if (user.banned) {
+            if (msg.text.startsWith(config.prefix)) {
+                return bot.sendMessage(chatId, 'You are banned from using this bot!', { replyToMessage: msg.message_id });
+            }
+            return; // Exit if user is locally banned
+        }
 
-        // === Reply Handler ===
-        if (replyStore.has(msg.reply_to_message?.message_id)) {
-            const replyData = replyStore.get(msg.reply_to_message.message_id);
-            const command = commands.get(replyData.commandName);
-            if (command?.reply) {
-                return command.reply({ msg, event: msg, Reply: replyData, message, bot });
+        // Check if user is banned in the specific group or chat (gcBan)
+        if (thread.users && thread.users.has(userId)) {
+            const userInThread = thread.users.get(userId);
+            if (userInThread.gcBan) {
+                if (msg.text.startsWith(config.prefix)) {
+                    return bot.sendMessage(chatId, 'You are banned from using this bot in this group!', { replyToMessage: msg.message_id });
+                }
+                return; // Exit if user is gcBanned
             }
         }
 
-        // === onChat Handler ===
-        for (let cmd of commands.values()) {
-            if (cmd.onChat) {
-                cmd.onChat({ event: msg, message, bot, args: text.split(' ') });
+        // Increment user's message count in the thread (if it's not a command)
+        if (!msg.text.startsWith(config.prefix)) {
+            if (!thread.users) {
+                thread.users = new Map();
             }
-        }
-
-        // === Command Handler ===
-        if (!text.startsWith(config.prefix)) return;
-
-        const args = text.slice(config.prefix.length).trim().split(/ +/);
-        const cmdName = args.shift().toLowerCase();
-        const command = commands.get(cmdName) || commands.get(aliases.get(cmdName));
-
-        if (!command) return bot.sendMessage(chatId, '❌ Invalid command');
-
-        // === Permission Check ===
-        const chatAdmins = await bot.getChatAdministrators(chatId);
-        const isBotAdmin = config.adminId.includes(userId);
-        const isGroupAdmin = isAdmin(userId, chatAdmins);
-
-        if (command.config.onlyAdmin && !isBotAdmin) {
-            return bot.sendMessage(chatId, '❌ Only bot admins can use this.');
-        }
-        if (command.config.role === 1 && !isGroupAdmin) {
-            return bot.sendMessage(chatId, '❌ Only group admins can use this.');
-        }
-
-        // === Cooldown ===
-        if (!cooldowns.has(cmdName)) cooldowns.set(cmdName, new Map());
-        const timestamps = cooldowns.get(cmdName);
-        const now = Date.now();
-        const cooldownAmount = (command.config.countDown || 3) * 1000;
-
-        if (timestamps.has(userId)) {
-            const expirationTime = timestamps.get(userId) + cooldownAmount;
-            if (now < expirationTime) {
-                const timeLeft = ((expirationTime - now) / 1000).toFixed(1);
-                return bot.sendMessage(chatId, `⏳ Wait ${timeLeft}s before using ${cmdName} again.`);
-            }
-        }
-        timestamps.set(userId, now);
-        setTimeout(() => timestamps.delete(userId), cooldownAmount);
-
-        // === Run Command ===
-        try {
-            if (typeof command.onStart === 'function') {
-                await command.onStart({
-                    msg, event: msg, bot, args, chatId, userId,
-                    message, config, botName: config.botName,
-                    senderName: `${msg.from.first_name} ${msg.from.last_name || ''}`,
-                    username: msg.from.username,
-                    threadModel, userModel, user, thread,
-                    api: config.globalapi
-                });
-            } else if (typeof command.run === 'function') {
-                await command.run({
-                    msg, event: msg, bot, args, chatId, userId,
-                    message, config, botName: config.botName,
-                    senderName: `${msg.from.first_name} ${msg.from.last_name || ''}`,
-                    username: msg.from.username,
-                    threadModel, userModel, user, thread,
-                    api: config.globalapi
-                });
+        
+            if (!thread.users.has(userId)) {
+                thread.users.set(userId, { totalMsg: 1 });
             } else {
-                message.reply('❌ No onStart() or run() function found.', { chatId });
+                thread.users.get(userId).totalMsg += 1;
             }
-        } catch (e) {
-            console.error(e);
-            message.reply('❌ Error while executing command.', { chatId });
+            await thread.save();
+        }
+        
+        // Handle command processing (if message starts with the configured prefix)
+        if (msg.text.startsWith(config.prefix)) {
+            const args = msg.text.slice(config.prefix.length).trim().split(/ +/);
+            const commandName = args.shift().toLowerCase();
+            const command = commands.get(commandName) || commands.get(aliases.get(commandName));
+
+            if (!command) {
+                return bot.sendMessage(chatId, 'Invalid command.', { replyToMessage: msg.message_id });
+            }
+        
+            const { role, cooldown } = command.config;
+
+            // Role validation
+            if (!(await hasPermission(userId, chatId, command.config))) {
+                return bot.sendMessage(chatId, 'You do not have permission to use this command.', { replyToMessage: msg.message_id });
+            }
+        
+            // Cooldown check
+            if (!cooldowns.has(commandName)) {
+                cooldowns.set(commandName, new Map());
+            }
+        
+            const now = Date.now();
+            const timestamps = cooldowns.get(commandName);
+            const cooldownAmount = (cooldown || 3) * 1000; // Default cooldown of 3 seconds
+        
+            if (timestamps.has(userId)) {
+                const expirationTime = timestamps.get(userId) + cooldownAmount;
+        
+                if (now < expirationTime) {
+                    const timeLeft = (expirationTime - now) / 1000;
+                    return bot.sendMessage(chatId, `Please wait ${timeLeft.toFixed(1)} more seconds before reusing the ${commandName} command.`, { replyToMessage: msg.message_id });
+                }
+            }
+        
+            timestamps.set(userId, now);
+            setTimeout(() => timestamps.delete(userId), cooldownAmount);
+        
+            // Execute command
+            try {
+                await command.onStart({ msg, bot, args, chatId, userId, config, botName: config.botName, senderName: `${msg.from.first_name} ${msg.from.last_name}`, username: msg.from.username, copyrightMark: config.copyrightMark, threadModel, userModel, user, thread, api: config.globalapi });
+            } catch (error) {
+                console.error(`Error executing command ${commandName}:`, error);
+                bot.sendMessage(chatId, 'There was an error executing the command.');
+            }
         }
     });
 
+    // Start the bot
     bot.start();
-    console.log('🤖 Bot Started...');
-}).catch(e => {
-    console.log('❌ MongoDB Error', e);
+    console.log('Bot started');
+}).catch(error => {
+    console.error('Error connecting to MongoDB', error);
 });
 
-// === Website Host ===
 const http = require('http');
-http.createServer((req, res) => {
+const server = http.createServer((req, res) => {
     res.setHeader('Content-Type', 'text/html');
-    res.end(`<html><body><h1>Bot is Running</h1></body></html>`);
-}).listen(config.port || 3000);
+    res.end(`
+        <html>
+            <head>
+                <title>Active</title>
+            </head>
+            <body style="margin: 0; padding: 0;">
+                <iframe width="100%" height="100%" src="https://apibysamir.onrender.com/" frameborder="0" allowfullscreen></iframe>
+            </body>
+        </html>`);
+});
+const port = config.port || 3000;
+server.listen(port, () => {
+    console.log(`Server online at port: ${port}`);
+});
